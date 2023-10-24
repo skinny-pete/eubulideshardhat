@@ -92,6 +92,8 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
         );
     }
 
+    function compound() external onlyOwner {}
+
     function close(uint256 positionId) external onlyTickSetter {}
 
     function rebalance(

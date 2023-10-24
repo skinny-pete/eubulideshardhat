@@ -45,6 +45,81 @@ contract UniswapWrapper is Ownable {
         swapRouter = ISwapRouter(swapRouterAddress);
     }
 
+    uint256 public constant HISTORY_SIZE = 16; // Size of the moving history. Adjust as needed.
+
+    struct YieldData {
+        uint256 collected0;
+        uint256 collected1;
+        uint256 timestamp;
+    }
+
+    // An array to keep track of the collected yields using the YieldData struct.
+    YieldData[HISTORY_SIZE] public yieldHistory;
+
+    // A pointer to the current position in the yieldHistory array.
+    uint256 public currentPosition = 0;
+
+    // A counter to track the number of yield data entries added.
+    uint256 public entriesAdded = 0;
+
+    /**
+     * @dev Add a collected yield data to the moving history.
+     * @param _collected0 The amount of yield collected for token0.
+     * @param _collected1 The amount of yield collected for token1.
+     */
+    function _addCollectedYield(
+        uint256 _collected0,
+        uint256 _collected1
+    ) internal {
+        YieldData memory newData = YieldData({
+            collected0: _collected0,
+            collected1: _collected1,
+            timestamp: block.timestamp
+        });
+
+        console.log("adding stuff: ", _collected0);
+
+        if (entriesAdded < HISTORY_SIZE) {
+            yieldHistory[entriesAdded] = newData;
+            entriesAdded++;
+        } else {
+            yieldHistory[currentPosition] = newData;
+            currentPosition = (currentPosition + 1) % HISTORY_SIZE;
+        }
+    }
+
+    /**
+     * @dev Get the last N collected yield data entries.
+     * @return An array of the last N (or fewer if not enough data points) collected yield data entries.
+     */
+    function _getLastNCollectedYields()
+        internal
+        view
+        returns (YieldData[] memory)
+    {
+        YieldData[] memory result = new YieldData[](entriesAdded);
+
+        for (uint256 i = 0; i < entriesAdded; i++) {
+            uint256 pos = (currentPosition + HISTORY_SIZE - entriesAdded + i) %
+                HISTORY_SIZE;
+            result[i] = yieldHistory[pos];
+        }
+
+        return result;
+    }
+
+    function DEV_getLastNCollectedYields()
+        public
+        view
+        returns (YieldData[] memory)
+    {
+        return _getLastNCollectedYields();
+    }
+
+    // function collect() external onlyOwner {
+
+    // }
+
     function getTickRange(
         address poolAddress
     ) internal view returns (int24 _tickLower, int24 _tickUpper) {
@@ -235,6 +310,23 @@ contract UniswapWrapper is Ownable {
         tickUpper = _tickUpper;
 
         return liquidity;
+    }
+
+    function collectFees() external onlyOwner returns (uint, uint) {
+        INonfungiblePositionManager.CollectParams memory params = INonfungiblePositionManager
+            .CollectParams({
+                tokenId: tokenId,
+                recipient: address(this), // Collect fees to this contract, change as desired
+                amount0Max: type(uint128).max, // Collect all available fees
+                amount1Max: type(uint128).max // Collect all available fees
+            });
+
+        (uint256 collectedAmount0, uint256 collectedAmount1) = positionManager
+            .collect(params);
+
+        _addCollectedYield(collectedAmount0, collectedAmount1);
+
+        return (collectedAmount0, collectedAmount1);
     }
 
     function increaseLiquidity(

@@ -6,6 +6,8 @@ const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 const { expect } = require("chai");
 const { network, ethers } = require("hardhat");
 
+const { simulateSwaps } = require("./utils.js");
+
 // const { hre } = require("hardhat");
 const uniswapPoolAddress = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640";
 
@@ -143,6 +145,38 @@ describe("UniswapWrapper", function () {
       tickUpper = await uniswapWrapper.tickUpper();
 
       await uniswapWrapper.redeployLiquidity(tickLower - 5, tickUpper - 5);
+    });
+  });
+
+  describe("yield", function () {
+    it("can collect earned fees", async () => {
+      const { uniswapWrapper, owner } = await loadFixture(
+        deployUniswapWrapperFixture
+      );
+      const amountUSDC = ethers.utils.parseUnits("10000", 6);
+      const amountEth = ethers.utils.parseEther("5000");
+      await getUSDC(amountUSDC, uniswapWrapper.address);
+      await wrapEth(amountEth, uniswapWrapper.address, owner);
+      await uniswapWrapper.addLiquidityAroundCurrentPrice(
+        ethers.utils.parseUnits("100", 6)
+      );
+      console.log("running long test, please wait");
+      const numRounds = 3;
+      for (let i = 0; i < numRounds; i++) {
+        await simulateSwaps(); //Let's generate some fees
+
+        await uniswapWrapper.collectFees();
+        // console.log(
+        //   "collected yields ",
+        //   i,
+        //   await uniswapWrapper.yieldHistory(i)
+        // );
+        const yieldData = await uniswapWrapper.yieldHistory(i);
+        expect(yieldData[0]).to.be.greaterThan(0);
+      }
+      const yieldData = await uniswapWrapper.yieldHistory(numRounds);
+      // console.log("final", yieldData, typeof yieldData);
+      expect(yieldData[numRounds][0]).to.be.equal(0);
     });
   });
 });
