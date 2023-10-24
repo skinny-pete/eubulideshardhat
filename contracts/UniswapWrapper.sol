@@ -77,8 +77,6 @@ contract UniswapWrapper is Ownable {
             timestamp: block.timestamp
         });
 
-        console.log("adding stuff: ", _collected0);
-
         if (entriesAdded < HISTORY_SIZE) {
             yieldHistory[entriesAdded] = newData;
             entriesAdded++;
@@ -324,8 +322,7 @@ contract UniswapWrapper is Ownable {
         (uint256 collectedAmount0, uint256 collectedAmount1) = positionManager
             .collect(params);
 
-        _addCollectedYield(collectedAmount0, collectedAmount1);
-
+        _addCollectedYield(collectedAmount0, collectedAmount1); //Add to list of yield checkpointsd
         return (collectedAmount0, collectedAmount1);
     }
 
@@ -380,8 +377,6 @@ contract UniswapWrapper is Ownable {
             uint256 collectedAmount1
         ) = _removeLiquidity();
 
-        console.log("removed liquidity");
-
         // 2. Calculate desired amounts
         (
             uint256 desiredAmount0,
@@ -392,7 +387,6 @@ contract UniswapWrapper is Ownable {
                 collectedAmount0,
                 collectedAmount1
             );
-        console.log("calculated swaps");
 
         // 3. Swap tokens if necessary
         _swapTokens(
@@ -401,8 +395,6 @@ contract UniswapWrapper is Ownable {
             collectedAmount0,
             collectedAmount1
         );
-
-        console.log("swapped");
 
         // 4. Add liquidity to the new tick range
         (uint256 newTokenId, uint128 liquidity) = _addLiquidityToNewRange(

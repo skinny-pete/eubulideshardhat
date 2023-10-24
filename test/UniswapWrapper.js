@@ -166,17 +166,12 @@ describe("UniswapWrapper", function () {
         await simulateSwaps(); //Let's generate some fees
 
         await uniswapWrapper.collectFees();
-        // console.log(
-        //   "collected yields ",
-        //   i,
-        //   await uniswapWrapper.yieldHistory(i)
-        // );
         const yieldData = await uniswapWrapper.yieldHistory(i);
         expect(yieldData[0]).to.be.greaterThan(0);
       }
       const yieldData = await uniswapWrapper.yieldHistory(numRounds);
       // console.log("final", yieldData, typeof yieldData);
-      expect(yieldData[numRounds][0]).to.be.equal(0);
+      expect(yieldData[0]).to.be.equal(0);
     });
   });
 });
