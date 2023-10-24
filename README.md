@@ -10,6 +10,7 @@ Eubulides is a project offering fixed yield positions on user deposits into Unis
 - **Fungible Liquidity** Share tokens are ERC20-compliant and are not tied to the non-fungible user position, so liquidity can be used elsewhere while users earn.
 
 ## Setup 🚀
+Note that the code is on 'master' branch *not* main
 
 1. Install the required packages:
    ```bash
