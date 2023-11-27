@@ -24,6 +24,11 @@ module.exports = {
         url: "https://mainnet.infura.io/v3/0f5c48489afe4ee383588b325a35b9da",
         blockNumber: 18392095,
       },
+      mining: {
+        mempool: {
+          order: "fifo"
+        }
+      }
     },
   },
 };

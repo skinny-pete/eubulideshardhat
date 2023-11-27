@@ -41,4 +41,11 @@ interface IUniswapWrapper {
         int24 newTickLower,
         int24 newTickUpper
     ) external returns (bool success);
+
+    function computeToken1Amount(
+        uint256 x,
+        uint160 sqrtPrice,
+        int24 _tickLower,
+        int24 _tickUpper
+    ) external pure returns (uint256 y);
 }

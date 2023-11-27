@@ -6,13 +6,13 @@ const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 const { expect } = require("chai");
 const { network, ethers } = require("hardhat");
 
-const { simulateSwaps } = require("./utils.js");
+const { simulateSwaps, getToken1AmountFromToken0, getTick } = require("./utils.js");
 
 // const { hre } = require("hardhat");
 const uniswapPoolAddress = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640";
 
 describe("UniswapWrapper", function () {
-  async function buyUSDC() {}
+  async function buyUSDC() { }
 
   async function deployUniswapWrapperFixture() {
     const [owner] = await ethers.getSigners();
@@ -173,5 +173,51 @@ describe("UniswapWrapper", function () {
       // console.log("final", yieldData, typeof yieldData);
       expect(yieldData[0]).to.be.equal(0);
     });
+
+    it("provides a quote", async () => {
+      const { uniswapWrapper, owner } = await loadFixture(
+        deployUniswapWrapperFixture
+      );
+
+      console.log("providing a quote")
+      const amountUSDC = ethers.utils.parseUnits("10000", 6);
+      const amountEth = ethers.utils.parseEther("5000");
+      await getUSDC(amountUSDC, uniswapWrapper.address);
+      await wrapEth(amountEth, uniswapWrapper.address, owner);
+      await uniswapWrapper.addLiquidityAroundCurrentPrice(
+        amountUSDC
+      );
+      console.log("added at tick: ", await getTick(uniswapPoolAddress))
+      console.log("running long test, please wait");
+      const numRounds = 17;
+      totals = []
+      for (let i = 0; i < numRounds; i++) {
+        newTotals = await simulateSwaps(); //Let's generate some fees
+        totals.push(newTotals)
+        await network.provider.send('evm_mine')
+        await network.provider.send('evm_mine')
+
+        await uniswapWrapper.collectFees();
+      }
+
+
+
+      console.log('finished sim')
+      console.log('totals: ', totals)
+      for (let i = 0; i < 16; i++) {
+        console.log("@@@@@@@@", await uniswapWrapper.getYieldHistory(i))
+
+      }
+
+      const amount0 = ethers.utils.parseUnits("1000", 6) //usdc
+      const amount1 = getToken1AmountFromToken0(amount0, 6, 18, uniswapPoolAddress)
+      const tick = await getTick(uniswapPoolAddress)
+      const periods = 4
+
+      console.log("sending tx")
+
+      const quote = await uniswapWrapper.quote(amount0, amount1, tick - 5, tick + 5, periods)
+      console.log("quote is", quote)
+    }).timeout(1000000)
   });
 });

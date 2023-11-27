@@ -53,7 +53,6 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
         address token1,
         uint256 amount0
     ) external onlyOwner {
-        console.log("initialising with this amount0", amount0);
         pools[token0][token1].addLiquidityAroundCurrentPrice(amount0);
     }
 
@@ -89,6 +88,20 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
             block.timestamp,
             duration,
             quote
+        );
+    }
+
+    function getPosition(
+        address who
+    ) public view returns (uint, uint, uint, uint, uint) {
+        userPosition memory pos = userPositions[who];
+
+        return (
+            pos.liquidity,
+            pos.yieldEarned,
+            pos.timeStarted,
+            pos.duration,
+            pos.quote
         );
     }
 

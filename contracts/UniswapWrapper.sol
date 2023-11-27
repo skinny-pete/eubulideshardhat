@@ -9,6 +9,7 @@ import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "@uniswap/v3-core/contracts/libraries/FullMath.sol";
+import "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
 
 import "hardhat/console.sol";
 
@@ -21,6 +22,8 @@ interface IUniswapV3PoolTokens {
 interface IERC20Decimals {
     function decimals() external view returns (uint8);
 }
+
+//A lot of this functionality, everything related to computing amounts should be moved to library at some point
 
 contract UniswapWrapper is Ownable {
     address public uniswapPool;
@@ -37,6 +40,9 @@ contract UniswapWrapper is Ownable {
     int24 public tickLower;
     int24 public tickUpper;
 
+    // uint token0Decimals;
+    // uint token1Decimals;
+
     constructor(address _uniswapPool) Ownable() {
         uniswapPool = _uniswapPool;
         positionManager = INonfungiblePositionManager(
@@ -50,6 +56,8 @@ contract UniswapWrapper is Ownable {
     struct YieldData {
         uint256 collected0;
         uint256 collected1;
+        int24 tickLower;
+        int24 tickUpper;
         uint256 timestamp;
     }
 
@@ -74,6 +82,8 @@ contract UniswapWrapper is Ownable {
         YieldData memory newData = YieldData({
             collected0: _collected0,
             collected1: _collected1,
+            tickLower: tickLower,
+            tickUpper: tickUpper,
             timestamp: block.timestamp
         });
 
@@ -84,6 +94,96 @@ contract UniswapWrapper is Ownable {
             yieldHistory[currentPosition] = newData;
             currentPosition = (currentPosition + 1) % HISTORY_SIZE;
         }
+    }
+
+    function calculateLiquidity(
+        uint256 amount0,
+        uint256 amount1,
+        int24 _tickLower,
+        int24 _tickUpper
+    ) internal view returns (uint128 liquidity) {
+        (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3Pool(uniswapPool)
+            .slot0();
+
+        liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(_tickLower),
+            TickMath.getSqrtRatioAtTick(_tickUpper),
+            amount0,
+            amount1
+        );
+        return liquidity;
+    }
+
+    // Calculate yield based on liquidity tokens and a specified period
+    function _calculateQuote(
+        uint256 liquidityTokens,
+        uint256 periods
+    ) internal view returns (uint256 yieldForToken0, uint256 yieldForToken1) {
+        uint256 totalYield0 = 0;
+        uint256 totalYield1 = 0;
+
+        for (
+            uint256 i = yieldHistory.length - periods;
+            i < yieldHistory.length;
+            i++
+        ) {
+            console.log("iteration", i, yieldHistory[i].collected0);
+            totalYield0 += yieldHistory[i].collected0;
+            totalYield1 += yieldHistory[i].collected1;
+        }
+
+        console.log("totalyield0", totalYield0);
+        console.log("totalyield1", totalYield1);
+        console.log("liquidityTokens", liquidityTokens);
+        console.log("currentLiquidity:", currentLiquidity);
+
+        yieldForToken0 =
+            (liquidityTokens * 10 ** 18 * totalYield0) /
+            (currentLiquidity);
+        yieldForToken1 =
+            (liquidityTokens * 10 ** 18 * totalYield1) /
+            (currentLiquidity);
+
+        // yieldForToken0 =
+        //     (IERC20Decimals(IUniswapV3Pool(uniswapPool).token0()).decimals() *
+        //         liquidityTokens *
+        //         totalYield0 *
+        //         10 ** 18) /
+        //     (currentLiquidity * 10 ** 18);
+        // yieldForToken1 =
+        //     (IERC20Decimals(IUniswapV3Pool(uniswapPool).token1()).decimals() *
+        //         liquidityTokens *
+        //         totalYield1 *
+        //         10 ** 18) /
+        //     (currentLiquidity * 10 ** 18);
+
+        return (yieldForToken0, yieldForToken1);
+    }
+
+    function quote(
+        uint256 amount0,
+        uint256 amount1,
+        int24 _tickLower,
+        int24 _tickUpper,
+        uint256 periods
+    ) public view returns (uint256 quote0, uint256 quote1) {
+        // First, calculate the liquidity that would be received for the provided token amounts
+        console.log("quoting");
+        uint128 liquidity = calculateLiquidity(
+            amount0,
+            amount1,
+            _tickLower,
+            _tickUpper
+        );
+        console.log("liquidity", liquidity);
+
+        // Then, use this liquidity to calculate the yield quote for each token
+        (quote0, quote1) = _calculateQuote(liquidity, periods);
+
+        console.log("got quote", quote0, quote1);
+
+        return (quote0, quote1);
     }
 
     /**
@@ -114,6 +214,25 @@ contract UniswapWrapper is Ownable {
         return _getLastNCollectedYields();
     }
 
+    //     uint256 collected0;
+    // uint256 collected1;
+    // int24 tickLower;
+    // int24 tickUpper;
+    // uint256 timestamp;
+
+    function getYieldHistory(
+        uint i
+    ) public view returns (uint256, uint256, int24, int24, uint256) {
+        YieldData memory out = yieldHistory[i];
+        return (
+            out.collected0,
+            out.collected1,
+            out.tickLower,
+            out.tickUpper,
+            out.timestamp
+        );
+    }
+
     // function collect() external onlyOwner {
 
     // }
@@ -123,8 +242,8 @@ contract UniswapWrapper is Ownable {
     ) internal view returns (int24 _tickLower, int24 _tickUpper) {
         (, int24 currentTick, , , , , ) = IUniswapV3Pool(poolAddress).slot0();
 
-        _tickLower = currentTick - 5;
-        _tickUpper = currentTick + 5;
+        _tickLower = currentTick - 105;
+        _tickUpper = currentTick + 35;
 
         return (_tickLower, _tickUpper);
     }
@@ -162,12 +281,12 @@ contract UniswapWrapper is Ownable {
     function computeToken1Amount(
         uint256 x, // amount of token0
         uint160 sqrtPrice, // current sqrt price
-        int24 tickLower, // tick corresponding to price_low
-        int24 tickUpper // tick corresponding to price_high
-    ) internal pure returns (uint256 y) {
+        int24 _tickLower, // tick corresponding to price_low
+        int24 _tickUpper // tick corresponding to price_high
+    ) public pure returns (uint256 y) {
         // Compute sqrt(price_low) and sqrt(price_high) from ticks
-        uint160 sqrtPriceLow = TickMath.getSqrtRatioAtTick(tickLower);
-        uint160 sqrtPriceHigh = TickMath.getSqrtRatioAtTick(tickUpper);
+        uint160 sqrtPriceLow = TickMath.getSqrtRatioAtTick(_tickLower);
+        uint160 sqrtPriceHigh = TickMath.getSqrtRatioAtTick(_tickUpper);
 
         // Calculate Liquidity_x
         uint256 liquidityX = FullMath.mulDiv(
@@ -311,18 +430,20 @@ contract UniswapWrapper is Ownable {
     }
 
     function collectFees() external onlyOwner returns (uint, uint) {
-        INonfungiblePositionManager.CollectParams memory params = INonfungiblePositionManager
-            .CollectParams({
+        INonfungiblePositionManager.CollectParams
+            memory params = INonfungiblePositionManager.CollectParams({
                 tokenId: tokenId,
-                recipient: address(this), // Collect fees to this contract, change as desired
-                amount0Max: type(uint128).max, // Collect all available fees
-                amount1Max: type(uint128).max // Collect all available fees
+                recipient: address(this),
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max
             });
 
         (uint256 collectedAmount0, uint256 collectedAmount1) = positionManager
             .collect(params);
 
-        _addCollectedYield(collectedAmount0, collectedAmount1); //Add to list of yield checkpointsd
+        _addCollectedYield(collectedAmount0, collectedAmount1); //Add to list of yield checkpoints
+        console.log("collecting fees", collectedAmount0, collectedAmount1);
+        console.log(currentPosition, entriesAdded);
         return (collectedAmount0, collectedAmount1);
     }
 
