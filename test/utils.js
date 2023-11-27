@@ -37,7 +37,6 @@ async function getUSDC(amount, addressTo) {
     "function balanceOf(address) public view returns (uint)",
   ];
 
-  // const addressTo = (await ethers.getSigner()).address;
 
   await network.provider.request({
     method: "hardhat_impersonateAccount",
@@ -99,10 +98,7 @@ async function simulateSwaps(numSwaps = 5) {
           throw new Error("Converted WETH amount is zero.");
         }
 
-        // console.log("amount WETH: ", amountInWETH)
 
-        // Ensure sufficient WETH balance
-        // ... add your balance checking logic here
         await wrapEth(amountInWETH, signer.address, signer);
         await weth.approve(SWAP_ROUTER_ADDRESS, amountInWETH);
         amountIn = amountInWETH; // Use the converted WETH amount for the swap
@@ -176,10 +172,6 @@ async function getToken1AmountFromToken0(
 
 //   return amountToken1Wei;
 // }
-4999902787712962025026
-381705534135000000001170244760675228
-620193657420001170244760675228
-
 
 
 async function slot0(poolAddress) {

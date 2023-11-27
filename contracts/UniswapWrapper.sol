@@ -115,6 +115,21 @@ contract UniswapWrapper is Ownable {
         return liquidity;
     }
 
+    function calculateAmounts(
+        uint128 liquidity
+    ) public view returns (uint amount0, uint amount1) {
+        (uint160 sqrtRatioX96, , , , , , ) = IUniswapV3Pool(uniswapPool)
+            .slot0();
+        uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(tickLower);
+        uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(tickUpper);
+        (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
+            sqrtRatioX96,
+            sqrtRatioAX96,
+            sqrtRatioBX96,
+            liquidity
+        );
+    }
+
     // Calculate yield based on liquidity tokens and a specified period
     function _calculateQuote(
         uint256 liquidityTokens,
@@ -128,60 +143,39 @@ contract UniswapWrapper is Ownable {
             i < yieldHistory.length;
             i++
         ) {
-            console.log("iteration", i, yieldHistory[i].collected0);
             totalYield0 += yieldHistory[i].collected0;
             totalYield1 += yieldHistory[i].collected1;
         }
 
-        console.log("totalyield0", totalYield0);
-        console.log("totalyield1", totalYield1);
-        console.log("liquidityTokens", liquidityTokens);
-        console.log("currentLiquidity:", currentLiquidity);
-
         yieldForToken0 =
-            (liquidityTokens * 10 ** 18 * totalYield0) /
+            (liquidityTokens * totalYield0 * 10 ** 18) /
             (currentLiquidity);
         yieldForToken1 =
-            (liquidityTokens * 10 ** 18 * totalYield1) /
+            (liquidityTokens * totalYield1 * 10 ** 18) /
             (currentLiquidity);
 
-        // yieldForToken0 =
-        //     (IERC20Decimals(IUniswapV3Pool(uniswapPool).token0()).decimals() *
-        //         liquidityTokens *
-        //         totalYield0 *
-        //         10 ** 18) /
-        //     (currentLiquidity * 10 ** 18);
-        // yieldForToken1 =
-        //     (IERC20Decimals(IUniswapV3Pool(uniswapPool).token1()).decimals() *
-        //         liquidityTokens *
-        //         totalYield1 *
-        //         10 ** 18) /
-        //     (currentLiquidity * 10 ** 18);
-
-        return (yieldForToken0, yieldForToken1);
+        return (yieldForToken0 / 10 ** 12, yieldForToken1);
     }
 
     function quote(
         uint256 amount0,
         uint256 amount1,
-        int24 _tickLower,
-        int24 _tickUpper,
+        // int24 _tickLower,
+        // int24 _tickUpper,
         uint256 periods
     ) public view returns (uint256 quote0, uint256 quote1) {
         // First, calculate the liquidity that would be received for the provided token amounts
-        console.log("quoting");
+
+        (, int24 currentTick, , , , , ) = IUniswapV3Pool(uniswapPool).slot0();
         uint128 liquidity = calculateLiquidity(
             amount0,
             amount1,
-            _tickLower,
-            _tickUpper
+            currentTick - 5,
+            currentTick + 5
         );
-        console.log("liquidity", liquidity);
 
         // Then, use this liquidity to calculate the yield quote for each token
         (quote0, quote1) = _calculateQuote(liquidity, periods);
-
-        console.log("got quote", quote0, quote1);
 
         return (quote0, quote1);
     }
@@ -213,12 +207,6 @@ contract UniswapWrapper is Ownable {
     {
         return _getLastNCollectedYields();
     }
-
-    //     uint256 collected0;
-    // uint256 collected1;
-    // int24 tickLower;
-    // int24 tickUpper;
-    // uint256 timestamp;
 
     function getYieldHistory(
         uint i
@@ -394,13 +382,6 @@ contract UniswapWrapper is Ownable {
             "wrapper approval token1 failed"
         );
 
-        // (int24 calcTickLower, int24 calcTickHigher) = getTickRange(uniswapPool);
-
-        // (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3Pool(uniswapPool)
-        //     .slot0();
-
-        // uint amount1 = getToken1Amount(sqrtPriceX96, amountA);
-
         INonfungiblePositionManager.MintParams
             memory mintParams = INonfungiblePositionManager.MintParams({
                 token0: IUniswapV3Pool(uniswapPool).token0(),
@@ -422,6 +403,7 @@ contract UniswapWrapper is Ownable {
 
         tokenId = newTokenId;
         currentLiquidity = liquidity;
+        console.log("liquidity returned is ", liquidity);
 
         tickLower = _tickLower;
         tickUpper = _tickUpper;
@@ -450,7 +432,7 @@ contract UniswapWrapper is Ownable {
     function increaseLiquidity(
         uint256 amount0,
         uint256 amount1
-    ) public onlyOwner {
+    ) public onlyOwner returns (uint) {
         IERC20(IUniswapV3Pool(uniswapPool).token0()).approve(
             nonFungiblePositionManagerAddress,
             amount0
@@ -475,7 +457,10 @@ contract UniswapWrapper is Ownable {
             increaseLiquidityParams
         );
 
+        uint userLiq = liquidity - currentLiquidity;
+
         currentLiquidity = liquidity;
+        return userLiq;
     }
 
     function positionLiquidity() internal view returns (uint128) {

@@ -35,7 +35,10 @@ interface IUniswapWrapper {
         int24 _tickUpper
     ) external;
 
-    function increaseLiquidity(uint256 amount0, uint256 amount1) external;
+    function increaseLiquidity(
+        uint256 amount0,
+        uint256 amount1
+    ) external returns (uint128);
 
     function redeployLiquidity(
         int24 newTickLower,
@@ -48,4 +51,14 @@ interface IUniswapWrapper {
         int24 _tickLower,
         int24 _tickUpper
     ) external pure returns (uint256 y);
+
+    function quote(
+        uint256 amount0,
+        uint256 amount1,
+        uint256 periods
+    ) external returns (uint256 quote0, uint256 quote1);
+
+    function calculateAmounts(
+        uint128 liquidity
+    ) external view returns (uint amount0, uint amount1);
 }

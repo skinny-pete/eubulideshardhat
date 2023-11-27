@@ -10,16 +10,25 @@ import "../interfaces/IUniswapWrapper.sol";
 import "hardhat/console.sol";
 
 contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
+    event PoolAdded(
+        address indexed poolAddress,
+        address token0,
+        address token1
+    );
+
     mapping(address => mapping(address => UniswapWrapper)) public pools;
 
     mapping(address => userPosition) userPositions;
 
     struct userPosition {
-        uint256 liquidity;
+        uint128 liquidity;
         uint256 yieldEarned;
         uint256 timeStarted;
         uint256 duration;
-        uint256 quote;
+        uint256 quote0;
+        uint256 quote1;
+        address token0;
+        address token1;
     }
 
     address public constant uniswapV3Factory =
@@ -39,13 +48,17 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
         address token0,
         address token1,
         uint24 fee
-    ) public onlyOwner {
+    ) public onlyOwner returns (address) {
         address poolAddress = IUniswapV3Factory(uniswapV3Factory).getPool(
             token0,
             token1,
             fee
         );
         pools[token0][token1] = new UniswapWrapper(poolAddress);
+
+        emit PoolAdded(address(pools[token0][token1]), token0, token1);
+
+        return address(pools[token0][token1]);
     }
 
     function initialisePoolAtCurrentPrice(
@@ -76,24 +89,49 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
             "pool not added"
         );
 
-        require(IERC20(token0).transferFrom(depositor, address(this), amount0));
-        require(IERC20(token1).transferFrom(depositor, address(this), amount1));
+        require(
+            IERC20(token0).transferFrom(
+                depositor,
+                address(pools[token0][token1]),
+                amount0
+            )
+        );
+        require(
+            IERC20(token1).transferFrom(
+                depositor,
+                address(pools[token0][token1]),
+                amount1
+            )
+        );
 
-        uint256 liquidity = 0;
-        uint256 quote = 0; //TODO
+        (uint quote0, uint quote1) = IUniswapWrapper(
+            address(pools[token0][token1])
+        ).quote(amount0, amount1, duration);
 
+        // console.log(address(pools[token0][token1]));
+        // console.log("core quotes ", quote0, quote1);
+
+        uint128 liquidity = IUniswapWrapper(address(pools[token0][token1]))
+            .increaseLiquidity(amount0, amount1);
         userPositions[depositor] = userPosition(
             liquidity,
             0,
             block.timestamp,
             duration,
-            quote
+            quote0,
+            quote1,
+            token0,
+            token1
         );
     }
 
     function getPosition(
         address who
-    ) public view returns (uint, uint, uint, uint, uint) {
+    )
+        public
+        view
+        returns (uint, uint, uint, uint, uint, uint, address, address)
+    {
         userPosition memory pos = userPositions[who];
 
         return (
@@ -101,13 +139,30 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
             pos.yieldEarned,
             pos.timeStarted,
             pos.duration,
-            pos.quote
+            pos.quote0,
+            pos.quote1,
+            pos.token0,
+            pos.token1
         );
     }
 
     function compound() external onlyOwner {}
 
-    function close(uint256 positionId) external onlyTickSetter {}
+    function close() external onlyTickSetter {
+        userPosition memory pos = userPositions[msg.sender];
+        uint total0 = 0;
+        uint total1 = 0;
+        (uint amount0, uint amount1) = IUniswapWrapper(
+            address(pools[pos.token0][pos.token1])
+        ).calculateAmounts(pos.liquidity);
+        if (block.timestamp >= pos.timeStarted + pos.duration) {
+            total0 = amount0 + pos.quote0;
+            total1 = amount1 + pos.quote1;
+        } else {
+            total0 = amount0;
+            total1 = amount1;
+        }
+    }
 
     function rebalance(
         int24 newTickLower,

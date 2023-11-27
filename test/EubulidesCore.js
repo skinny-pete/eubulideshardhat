@@ -147,10 +147,12 @@ describe("EubulidesCore", function () {
       const amount0 = ethers.utils.parseUnits("10", 6);
       const amount1 = await getToken1AmountFromToken0(
         amount0,
-        18,
+        6,
         18,
         poolAddress
       );
+
+      console.log("js amounts: ", amount0, amount1)
 
       await getUSDC(amount0, owner.address);
       await wrapEth(amount1, owner.address, owner);
@@ -172,9 +174,80 @@ describe("EubulidesCore", function () {
       const position = await eubulidesCore.getPosition(owner.address);
       expect(position[3]).to.equal(duration);
     });
+
+    // it("Acceots a")
   });
 
-  describe("User Withdrawals", async () => {});
+  describe("User Withdrawals", () => {
+    it("Allows a user to close a position", async () => {
+      const { eubulidesCore, owner, USDCToken, WETHToken } = await loadFixture(
+        deployEubulidesCoreFixture
+      );
 
-  describe("User Positions", async () => {});
+      await eubulidesCore.addPool(USDC_ADDRESS, WETH_ADDRESS, 500);
+
+      const initialUSDC = ethers.utils.parseUnits("1000", 6); //USDC annoyingly uses 6 decimals
+
+      //Let's get some liquidity to add
+      await getUSDC(initialUSDC, owner.address);
+      await wrapEth(ethers.utils.parseEther("1000"), owner.address, owner);
+
+      //Let's just send it straight to the appropriate UniswapWrapper for the purposes of this test
+
+      const wrapperAddress = await eubulidesCore.pools(
+        USDC_ADDRESS,
+        WETH_ADDRESS
+      );
+
+      await wrapEth(ethers.utils.parseEther("1000"), wrapperAddress, owner);
+
+      await USDCToken.transfer(wrapperAddress, initialUSDC);
+      const wrapper = await ethers.getContractAt(
+        "UniswapWrapper",
+        wrapperAddress
+      );
+
+      await eubulidesCore.initialisePoolAtCurrentPrice(
+        USDC_ADDRESS,
+        WETH_ADDRESS,
+        initialUSDC
+      );
+
+      const poolAddress = await wrapper.uniswapPool();
+
+      const amount0 = ethers.utils.parseUnits("10", 6);
+      const amount1 = await getToken1AmountFromToken0(
+        amount0,
+        6,
+        18,
+        poolAddress
+      );
+
+      console.log("js amounts: ", amount0, amount1)
+
+      await getUSDC(amount0, owner.address);
+      await wrapEth(amount1, owner.address, owner);
+
+      await USDCToken.approve(eubulidesCore.address, amount0);
+      await WETHToken.approve(eubulidesCore.address, amount1);
+
+      const duration = 1000;
+
+      await eubulidesCore.deposit(
+        USDC_ADDRESS,
+        WETH_ADDRESS,
+        amount0,
+        amount1,
+        owner.address,
+        duration
+      );
+
+      const position = await eubulidesCore.getPosition(owner.address);
+      console.log(position)
+
+      await eubulidesCore.close()
+    })
+  });
+
+  describe("User Positions", async () => { });
 });

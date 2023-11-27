@@ -180,7 +180,7 @@ describe("UniswapWrapper", function () {
       );
 
       console.log("providing a quote")
-      const amountUSDC = ethers.utils.parseUnits("10000", 6);
+      const amountUSDC = ethers.utils.parseUnits("100000", 6);
       const amountEth = ethers.utils.parseEther("5000");
       await getUSDC(amountUSDC, uniswapWrapper.address);
       await wrapEth(amountEth, uniswapWrapper.address, owner);
@@ -209,7 +209,7 @@ describe("UniswapWrapper", function () {
 
       }
 
-      const amount0 = ethers.utils.parseUnits("1000", 6) //usdc
+      const amount0 = ethers.utils.parseUnits("10000", 6) //usdc
       const amount1 = getToken1AmountFromToken0(amount0, 6, 18, uniswapPoolAddress)
       const tick = await getTick(uniswapPoolAddress)
       const periods = 4
