@@ -216,7 +216,7 @@ describe("UniswapWrapper", function () {
 
       console.log("sending tx")
 
-      const quote = await uniswapWrapper.quote(amount0, amount1, tick - 5, tick + 5, periods)
+      const quote = await uniswapWrapper.quote(amount0, amount1, periods)
       console.log("quote is", quote)
     }).timeout(1000000)
   });

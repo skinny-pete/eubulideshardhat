@@ -154,7 +154,9 @@ contract UniswapWrapper is Ownable {
             (liquidityTokens * totalYield1 * 10 ** 18) /
             (currentLiquidity);
 
-        return (yieldForToken0 / 10 ** 12, yieldForToken1);
+        console.log("calculate quote", yieldForToken0, yieldForToken1);
+
+        return (yieldForToken0, yieldForToken1);
     }
 
     function quote(
@@ -325,7 +327,6 @@ contract UniswapWrapper is Ownable {
         (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3Pool(uniswapPool)
             .slot0();
 
-        // uint256 amount1 = getToken1Amount(sqrtPriceX96, amount0);
         (int24 _tickLower, int24 _tickUpper) = getTickRange(uniswapPool);
         uint256 amount1 = computeToken1Amount(
             amount0,
@@ -457,10 +458,11 @@ contract UniswapWrapper is Ownable {
             increaseLiquidityParams
         );
 
-        uint userLiq = liquidity - currentLiquidity;
+        currentLiquidity = positionLiquidity();
+        // uint userLiq = liquidity - currentLiquidity;
+        // console.log("userLiqstuff", currentLiquidity, liquidity, userLiq);
 
-        currentLiquidity = liquidity;
-        return userLiq;
+        return liquidity;
     }
 
     function positionLiquidity() internal view returns (uint128) {
@@ -471,51 +473,51 @@ contract UniswapWrapper is Ownable {
         return liquidity;
     }
 
-    function redeployLiquidity(
-        int24 newTickLower,
-        int24 newTickUpper
-    ) external onlyOwner returns (bool success) {
-        require(newTickLower < newTickUpper, "Ticks are set incorrectly");
+    // function redeployLiquidity(
+    //     int24 newTickLower,
+    //     int24 newTickUpper
+    // ) external onlyOwner returns (bool success) {
+    //     require(newTickLower < newTickUpper, "Ticks are set incorrectly");
 
-        // 1. Remove liquidity from the current position
-        (
-            uint256 collectedAmount0,
-            uint256 collectedAmount1
-        ) = _removeLiquidity();
+    //     // 1. Remove liquidity from the current position
+    //     (
+    //         uint256 collectedAmount0,
+    //         uint256 collectedAmount1
+    //     ) = _removeLiquidity();
 
-        // 2. Calculate desired amounts
-        (
-            uint256 desiredAmount0,
-            uint256 desiredAmount1
-        ) = _calculateDesiredAmounts(
-                newTickLower,
-                newTickUpper,
-                collectedAmount0,
-                collectedAmount1
-            );
+    //     // 2. Calculate desired amounts
+    //     (
+    //         uint256 desiredAmount0,
+    //         uint256 desiredAmount1
+    //     ) = _calculateDesiredAmounts(
+    //             newTickLower,
+    //             newTickUpper,
+    //             collectedAmount0,
+    //             collectedAmount1
+    //         );
 
-        // 3. Swap tokens if necessary
-        _swapTokens(
-            desiredAmount0,
-            desiredAmount1,
-            collectedAmount0,
-            collectedAmount1
-        );
+    //     // 3. Swap tokens if necessary
+    //     _swapTokens(
+    //         desiredAmount0,
+    //         desiredAmount1,
+    //         collectedAmount0,
+    //         collectedAmount1
+    //     );
 
-        // 4. Add liquidity to the new tick range
-        (uint256 newTokenId, uint128 liquidity) = _addLiquidityToNewRange(
-            newTickLower,
-            newTickUpper,
-            desiredAmount0,
-            desiredAmount1
-        );
+    //     // 4. Add liquidity to the new tick range
+    //     (uint256 newTokenId, uint128 liquidity) = _addLiquidityToNewRange(
+    //         newTickLower,
+    //         newTickUpper,
+    //         desiredAmount0,
+    //         desiredAmount1
+    //     );
 
-        // Update the new tokenId
-        tokenId = newTokenId;
-        currentLiquidity = liquidity;
+    //     // Update the new tokenId
+    //     tokenId = newTokenId;
+    //     currentLiquidity = liquidity;
 
-        return true;
-    }
+    //     return true;
+    // }
 
     function _calculateDesiredAmounts(
         int24 newTickLower,
@@ -592,55 +594,71 @@ contract UniswapWrapper is Ownable {
         }
     }
 
-    function _addLiquidityToNewRange(
-        int24 newTickLower,
-        int24 newTickUpper,
-        uint256 desiredAmount0,
-        uint256 desiredAmount1
-    ) internal returns (uint256 newTokenId, uint128 liquidity) {
-        INonfungiblePositionManager.MintParams
-            memory mintParams = INonfungiblePositionManager.MintParams({
-                token0: IUniswapV3Pool(uniswapPool).token0(),
-                token1: IUniswapV3Pool(uniswapPool).token1(),
-                fee: IUniswapV3Pool(uniswapPool).fee(),
-                tickLower: newTickLower,
-                tickUpper: newTickUpper,
-                amount0Desired: desiredAmount0,
-                amount1Desired: desiredAmount1,
-                amount0Min: 0,
-                amount1Min: 0,
-                recipient: address(this),
-                deadline: block.timestamp + 1 hours
-            });
-
-        (newTokenId, liquidity, , ) = positionManager.mint(mintParams);
-        return (newTokenId, liquidity);
+    function withdraw(uint128 amount) external onlyOwner returns (uint, uint) {
+        return _removeLiquidity(amount);
     }
 
-    function _removeLiquidity() internal returns (uint256, uint256) {
+    // function _addLiquidityToNewRange(
+    //     int24 newTickLower,
+    //     int24 newTickUpper,
+    //     uint256 desiredAmount0,
+    //     uint256 desiredAmount1
+    // ) internal returns (uint256 newTokenId, uint128 liquidity) {
+    //     INonfungiblePositionManager.MintParams
+    //         memory mintParams = INonfungiblePositionManager.MintParams({
+    //             token0: IUniswapV3Pool(uniswapPool).token0(),
+    //             token1: IUniswapV3Pool(uniswapPool).token1(),
+    //             fee: IUniswapV3Pool(uniswapPool).fee(),
+    //             tickLower: newTickLower,
+    //             tickUpper: newTickUpper,
+    //             amount0Desired: desiredAmount0,
+    //             amount1Desired: desiredAmount1,
+    //             amount0Min: 0,
+    //             amount1Min: 0,
+    //             recipient: address(this),
+    //             deadline: block.timestamp + 1 hours
+    //         });
+
+    //     (newTokenId, liquidity, , ) = positionManager.mint(mintParams);
+    //     return (newTokenId, liquidity);
+    // }
+
+    function _removeLiquidity(
+        uint128 amount
+    ) internal returns (uint256, uint256) {
+        console.log("_removeLiquidity()", amount);
+        console.log("currentLiq", currentLiquidity);
+        console.log("positionLiquidity()", positionLiquidity());
         INonfungiblePositionManager.DecreaseLiquidityParams
             memory decreaseParams = INonfungiblePositionManager
                 .DecreaseLiquidityParams({
                     tokenId: tokenId,
-                    liquidity: positionLiquidity(), // removing all liquidity
+                    liquidity: amount,
                     amount0Min: 0,
                     amount1Min: 0,
                     deadline: block.timestamp + 1 hours
                 });
 
-        positionManager.decreaseLiquidity(decreaseParams);
+        (uint amount0, uint amount1) = positionManager.decreaseLiquidity(
+            decreaseParams
+        );
 
-        INonfungiblePositionManager.CollectParams
-            memory collectParams = INonfungiblePositionManager.CollectParams({
-                tokenId: tokenId,
-                recipient: address(this),
-                amount0Max: type(uint128).max,
-                amount1Max: type(uint128).max
-            });
+        // INonfungiblePositionManager.CollectParams
+        //     memory collectParams = INonfungiblePositionManager.CollectParams({
+        //         tokenId: tokenId,
+        //         recipient: address(this),
+        //         amount0Max: type(uint128).max,
+        //         amount1Max: type(uint128).max
+        //     });
 
-        (uint256 collectedAmount0, uint256 collectedAmount1) = positionManager
-            .collect(collectParams);
+        // (uint256 collectedAmount0, uint256 collectedAmount1) = positionManager
+        //     .collect(collectParams);
 
-        return (collectedAmount0, collectedAmount1);
+        IUniswapV3Pool pool = IUniswapV3Pool(uniswapPool);
+        console.log("withdrawing ", amount0, amount1);
+        IERC20(pool.token0()).transfer(msg.sender, amount0);
+        IERC20(pool.token1()).transfer(msg.sender, amount1);
+
+        return (amount0, amount1);
     }
 }

@@ -61,4 +61,6 @@ interface IUniswapWrapper {
     function calculateAmounts(
         uint128 liquidity
     ) external view returns (uint amount0, uint amount1);
+
+    function withdraw(uint128 amount) external returns (uint, uint);
 }

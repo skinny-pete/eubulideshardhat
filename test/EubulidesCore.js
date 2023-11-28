@@ -175,6 +175,44 @@ describe("EubulidesCore", function () {
       expect(position[3]).to.equal(duration);
     });
 
+    it("allows quoting from single asset", async () => {
+      const { eubulidesCore, owner, USDCToken, WETHToken } = await loadFixture(
+        deployEubulidesCoreFixture
+      );
+
+      await eubulidesCore.addPool(USDC_ADDRESS, WETH_ADDRESS, 500);
+
+      const initialUSDC = ethers.utils.parseUnits("1000", 6); //USDC annoyingly uses 6 decimals
+
+      //Let's get some liquidity to add
+      await getUSDC(initialUSDC, owner.address);
+      await wrapEth(ethers.utils.parseEther("1000"), owner.address, owner);
+
+      //Let's just send it straight to the appropriate UniswapWrapper for the purposes of this test
+
+      const wrapperAddress = await eubulidesCore.pools(
+        USDC_ADDRESS,
+        WETH_ADDRESS
+      );
+
+      await wrapEth(ethers.utils.parseEther("1000"), wrapperAddress, owner);
+
+      await USDCToken.transfer(wrapperAddress, initialUSDC);
+      const wrapper = await ethers.getContractAt(
+        "UniswapWrapper",
+        wrapperAddress
+      );
+
+      await eubulidesCore.initialisePoolAtCurrentPrice(
+        USDC_ADDRESS,
+        WETH_ADDRESS,
+        initialUSDC
+      );
+
+      const vals = await eubulidesCore.quoteSingle(USDC_ADDRESS, WETH_ADDRESS, ethers.utils.parseUnits("1000", 6), 3)
+      console.log("values: ", vals)
+    })
+
     // it("Acceots a")
   });
 

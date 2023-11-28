@@ -2,6 +2,7 @@
 pragma solidity ^0.7.0;
 
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
+import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20Burnable.sol";
 import "./UniswapWrapper.sol";
@@ -59,6 +60,17 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
         emit PoolAdded(address(pools[token0][token1]), token0, token1);
 
         return address(pools[token0][token1]);
+    }
+
+    function getPool(
+        address token0,
+        address token1
+    ) public view returns (address) {
+        return address(pools[token0][token1]);
+    }
+
+    function collectFees(address token0, address token1) external onlyOwner {
+        pools[token0][token1].collectFees();
     }
 
     function initialisePoolAtCurrentPrice(
@@ -125,6 +137,32 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
         );
     }
 
+    function quoteSingle(
+        address token0,
+        address token1,
+        uint amount0,
+        uint duration
+    ) public view returns (uint amount1, uint quote0, uint quote1) {
+        UniswapWrapper wrapper = pools[token0][token1];
+
+        address pool = wrapper.uniswapPool();
+        (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3Pool(pool).slot0();
+
+        amount1 = wrapper.getToken1Amount(sqrtPriceX96, amount0);
+
+        (quote0, quote1) = UniswapWrapper(address(pools[token0][token1])).quote(
+            amount0,
+            amount1,
+            duration
+        );
+
+        return (amount1, quote0, quote1);
+    }
+
+    //  function getPoolInfo(address token0, address token1) public view returns(address wrapper, address pool) {
+    //     IUniswapV3Pool(pools[token0][token1])
+    //  }
+
     function getPosition(
         address who
     )
@@ -152,9 +190,12 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
         userPosition memory pos = userPositions[msg.sender];
         uint total0 = 0;
         uint total1 = 0;
+        // (uint amount0, uint amount1) = IUniswapWrapper(
+        //     address(pools[pos.token0][pos.token1])
+        // ).calculateAmounts(pos.liquidity);
         (uint amount0, uint amount1) = IUniswapWrapper(
             address(pools[pos.token0][pos.token1])
-        ).calculateAmounts(pos.liquidity);
+        ).withdraw(pos.liquidity);
         if (block.timestamp >= pos.timeStarted + pos.duration) {
             total0 = amount0 + pos.quote0;
             total1 = amount1 + pos.quote1;
@@ -162,6 +203,9 @@ contract EubulidesCore is Ownable, ERC20, ERC20Burnable {
             total0 = amount0;
             total1 = amount1;
         }
+
+        // IERC20(pos.token0).transfer(msg.sender, total0);
+        // IERC20(pos.token1).transfer(msg.sender, total1);
     }
 
     function rebalance(
